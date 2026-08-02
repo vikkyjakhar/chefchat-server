@@ -9,6 +9,8 @@ const io = new Server(httpServer, {
 });
 
 const rooms = {};
+const roomPasswords = {};
+const roomCreators = {};
 const getUsers = (roomId) => Object.values(rooms[roomId] ?? {});
 const ts = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -17,10 +19,24 @@ io.on('connection', (socket) => {
   let currentRoom = null;
   let currentName = null;
 
-  socket.on('join', ({ roomId, userName }) => {
+  socket.on('join', ({ roomId, userName, password }) => {
     const name = String(userName ?? '').trim().slice(0, 20);
     const room = String(roomId ?? '').trim().slice(0, 32);
+    const pass = String(password ?? '').trim();
     if (!name || !room) return;
+
+    const roomExists = !!rooms[room];
+    if (roomExists) {
+      const expected = roomPasswords[room] ?? '';
+      if (expected && pass !== expected) {
+        socket.emit('join:error', { message: 'Incorrect room password.' });
+        return;
+      }
+    } else {
+      roomPasswords[room] = pass;
+      roomCreators[room] = socket.id;
+    }
+
     currentRoom = room;
     currentName = name;
     socket.join(room);
